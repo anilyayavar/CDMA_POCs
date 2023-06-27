@@ -1,0 +1,13 @@
+name: CDMA_POCs
+title: CDMA_POCs
+username:
+account: anil-goyal
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 9365722
+bundleId: 7388492
+url: https://anil-goyal.shinyapps.io/CDMA_POCs/
+when: 1687779908.67392
+lastSyncTime: 1687779908.67393
+asMultiple: FALSE
+asStatic: FALSE
