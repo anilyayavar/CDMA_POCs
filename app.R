@@ -15,7 +15,7 @@ ui <- fluidPage(
     sidebarPanel(
       h3("Upload your data"),
       fileInput("file", 
-                "Upload CSV", 
+                "Upload CSV (Size: Upto max 5 mb)", 
                 accept = ".csv"
       ), # file widget
       selectInput("variable", 
