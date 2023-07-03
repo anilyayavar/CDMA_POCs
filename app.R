@@ -1,46 +1,71 @@
 ####### Add Libraries ----------------------
 library(shiny)
-library(tidyr)
-library(dplyr)
+library(tidyverse)
 library(igraph)
+
+##### Helper Functions and variables ----------------
+
+
+
 
 ############### UI function -----------------
 
 ui <- fluidPage(
-  theme = bslib::bs_theme(bootswatch = "united"),
+  theme = bslib::bs_theme(bootswatch = "lumen"),
   titlePanel(
     h1("Your One stop solution to find a network of duplicates")
   ),
   sidebarLayout(
     sidebarPanel(
-      h3("Upload your data"),
-      fileInput("file", 
-                "Upload CSV (Size: Upto max 5 mb)", 
-                accept = ".csv"
-      ), # file widget
-      selectInput("variable", 
-                  "Select ID Column", 
-                  choices = NULL
-      ), # select widget
-      selectizeInput("other_vars", 
-                     "Select other attribute columns", 
-                     multiple = TRUE,
-                     choices = NULL,
-                     options = list(maxItems = 3, 
-                                    placeholder = 'Select upto a max of four columns')
-      ), # other selections
-      downloadButton("download", "Download.csv")
+      wellPanel(h3("Upload your data"),
+                fileInput("file", 
+                          "Upload CSV (Size: Upto max 5 mb)", 
+                          accept = ".csv"
+                ),
+                selectInput("delims", "Choose Your Delimiter", choices = c(",", ";", " ", "~", "|"))
+      ),
+      br(),# file widget
+      wellPanel(selectInput("variable", 
+                            "Select ID Column", 
+                            choices = NULL
+      )
+      ),
+      br(), # select widget
+      wellPanel(selectizeInput("other_vars", 
+                               "Select other attribute columns", 
+                               multiple = TRUE,
+                               choices = NULL,
+                               options = list(maxItems = 3, 
+                                              placeholder = 'Select upto a max of four columns')
+                               )
+                ), # other selections
+      #actionButton("calc", "Calculate! and display top 10 results"),
+      br(),
+      wellPanel(downloadButton("download", "Download.csv"))
     ),
     mainPanel(
-      h6("Made by - Anil Goyal & Chandersheel"),
-      tableOutput("head"),
-      tableOutput("head_2")
+      p("Made by - Anil Goyal & Chandersheel", align = "right"),
+      hr(),
+      br(),
+      wellPanel(p(em("Top 6 Rows"), align = "center"),
+                hr(),
+                tableOutput("head")),
+      br(),
+      wellPanel(p(em("Output"), align = "center"),
+                hr(),
+                dataTableOutput("head_2"))
     )
   )
 )
 
 ######### Server Function ----------------
 server <- function(input, output,session) {
+  
+  # Solve delim issue
+  # delims <- reactive({
+  #   input$delims
+  # })
+
   
   # get data from file
   data <- reactive({
@@ -52,10 +77,12 @@ server <- function(input, output,session) {
                   "Invalid file format. Please upload a .csv file only"
     )
     )
-    
+    file1 <- input$file
+    if(is.null(file1)){return()}
     dataset <- vroom::vroom(
       input$file$datapath, 
-      delim = ","
+      delim = input$delims,
+      col_types = c(.default = "c")
     )
     
     # let the user know if the data contains no numeric column
@@ -65,7 +92,7 @@ server <- function(input, output,session) {
   })
   
   # create the select input based on the numeric columns in the dataframe
-  observeEvent(input$file, {
+  observeEvent(c(input$file, input$delims), {
     req(data())
     #num_cols <- data()
     updateSelectInput(session, 
@@ -114,15 +141,14 @@ server <- function(input, output,session) {
       as.tibble() %>% 
       right_join(data2() %>% 
                    mutate(across(.cols = all_of(input$variable), as.factor)),
-                 by = all_of(input$variable)) %>% 
+                 by = (input$variable)) %>% 
       mutate(GROUP_ID = as.integer(GROUP_ID)) %>% 
       arrange(GROUP_ID, list(input$other_vars))
   })
   
-  # Another View 6 rows
-  output$head_2 <- renderTable({
-    data_net() %>% 
-      head(10)
+  # View Final Data
+  output$head_2 <- renderDataTable({
+    data_net() 
   })
   
   output$download <- downloadHandler(
