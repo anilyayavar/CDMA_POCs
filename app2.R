@@ -1,3 +1,4 @@
+### Load libraries ----------------
 library(shiny)
 library(gridlayout)
 library(bslib)
@@ -5,8 +6,27 @@ library(vroom)
 library(tidyverse)
 library(igraph)
 library(shinyjs)
+library(visNetwork)
 
 ### Helper Functions ----------------
+
+data_summ <- function(data){
+  cat(paste0('The data contains\n - ', 
+             nrow(data),
+             ' rows and\n - ', 
+             ncol(data), 
+             ' columns.\n',
+             'If there is mismatch between row and/or column counts, check the de-limiter'
+  ))
+}
+
+
+head_5 <- function(data){
+  data %>% 
+    select(seq(min(5, ncol(data)))) %>% 
+    head(6)
+}
+
 dup_chart <- function(data) {
   rbind(
     data %>% 
@@ -27,7 +47,10 @@ dup_chart <- function(data) {
     geom_col(aes(factor(name, levels = rev(unique(data2$name))), value), fill = 'grey') +
     geom_col(data = filter(data2, col == 'Dupes'), aes(name, value), fill = 'red') +
     coord_flip() +
-    labs(title = "Dupes",x = '', y = "Dupes", subtitle = "If you aren't seeing any red color, it means there are no Duplicate values in the data") +
+    labs(title = "Dupes",
+         x = '', 
+         y = "Dupes", 
+         subtitle = "If you aren't seeing any red color, it means there are no Duplicate values in the data") +
     theme_minimal()
 }
 
@@ -49,9 +72,13 @@ na_chart <- function(data) {
     filter(col == 'N') %>% 
     ggplot() +
     geom_col(aes(factor(name, levels = rev(unique(data2$name))), value), fill = 'grey') +
-    geom_col(data = filter(data2, col == 'NAs'), aes(name, value), fill = 'red') +
+    geom_col(data = filter(data2, col == 'NAs'), 
+             aes(name, value), fill = 'red') +
     coord_flip() +
-    labs(title = "Missing values",x = '', y = 'NA Values', subtitle = "If you aren't seeing any red color, it means there are no NA values in the data") +
+    labs(title = "Missing values",
+         x = '', 
+         y = 'NA Values', 
+         subtitle = "If you aren't seeing any red color, it means there are no NA values in the data") +
     theme_minimal()
   
 }
@@ -72,6 +99,24 @@ eligible_id_cols <- function(data){
               pivot_longer(everything()) %>% 
               filter(value == 0) %>% 
               pull(name))
+}
+
+group_ext <- function(data){
+  data %>% 
+    components() %>% 
+    pluck(membership) %>% 
+    unique()
+}
+
+my_viz <- function(g){
+  V(g)$title <- paste('Group ID: ', clusters(g)$membership)
+  visIgraph(g, layout = 'layout_with_fr')
+}
+
+make_sub <- function(g, mem){
+  components <- clusters(g)$membership
+  induced_subgraph(g, which(components == mem)) %>% 
+    visIgraph(layout = 'layout_with_fr')
 }
 
 ### UI -----------------
@@ -98,9 +143,16 @@ ui <- navbarPage(
                                                                 choices = c(",", ";", " ", "~", "|"))
                                           )
                                    ),
-                                   column(7, wellPanel(p(em("Top 6 Rows"), align = "center"),
-                                                       hr(),
-                                                       tableOutput("head")))
+                                   column(7, 
+                                          fluidRow(wellPanel(
+                                            verbatimTextOutput("summ")
+                                          )
+                                          ),
+                                          fluidRow(wellPanel(p(em("Top 6 Rows - At most first 5 Columns will only be displayed"), 
+                                                               align = "center"),
+                                                             hr(),
+                                                             tableOutput("head")))
+                                          )
                                  )),
                         tabPanel("Peek into Data",
                                  fluidRow(
@@ -166,12 +218,31 @@ ui <- navbarPage(
            )),
   tabPanel(title = "Find Your Duplicates",
            fluidRow(
-             column(3, wellPanel(downloadButton("download", "Download.csv"))),
+             column(3, 
+                    wellPanel(actionButton("button_calc", "Calculate Network of Duplicates")),
+                    wellPanel(downloadButton("download", "Download.csv"))
+                    ),
              column(7, wellPanel(p(em("Output"), align = "center"),
                                  hr(),
                                  dataTableOutput("head_2")))
            )),
-  tabPanel(title = "Visualise")
+  tabPanel(title = "Visualise",
+           fluidRow(
+             column(3, wellPanel(
+               actionButton('gen_plot', "Generate Plot")
+             )),
+             column(9, 
+                    visNetwork::visNetworkOutput('plot1'))
+           ),
+           fluidRow(
+             column(3, wellPanel(
+               selectInput('spec_plot', 'Select Group ID/Cluster ID to visualise any single Cluster', choices = NULL)
+             )),
+             column(9, 
+                    visNetwork::visNetworkOutput('plot2')
+                    )
+           )
+           )
 )
 
 
@@ -207,6 +278,11 @@ server <- function(input, output,session) {
     dataset
   })
   
+  ## Present data Summary
+  output$summ <- renderPrint({
+    data_summ(data())
+  })
+  
   ## select input ID values to be updated - reactive var
   id_cols <- reactive({
     eligible_id_cols(data())
@@ -237,10 +313,7 @@ server <- function(input, output,session) {
   
   # View First 6 Rows
   output$head <- renderTable({
-    data() %>% 
-      mutate(across(everything(), 
-                    as.character)) %>% 
-      head(6)
+    head_5(data())
   })
   
   # Modify data - retain selected columns only
@@ -252,13 +325,19 @@ server <- function(input, output,session) {
   })
   
   # Network analysis
-  # Create Group ID which is a cluster ID
-  data_net <- reactive({
+  # Create graph object
+  data_g <- reactive({
     data2() %>% 
       pivot_longer(cols = all_of(input$other_vars),
                    values_drop_na = TRUE) %>% 
       select(all_of(input$variable), value) %>% 
-      graph_from_data_frame() %>% 
+      graph_from_data_frame()
+  })
+  
+  
+  # Create Group ID which is a cluster ID
+  data_net <- reactive({
+    data_g() %>% 
       components() %>% 
       pluck(membership) %>% 
       stack() %>% 
@@ -275,7 +354,7 @@ server <- function(input, output,session) {
   plotReady <- reactiveValues(ok = FALSE)
   
   observeEvent(input$button_na, {
-    shinyjs::disable('button_na')
+    #shinyjs::disable('button_na')
     plotReady$ok <- TRUE
   })
   
@@ -291,9 +370,49 @@ server <- function(input, output,session) {
   ## Reactive val2
   plotReady2 <- reactiveValues(ok = FALSE)
   
+  ## Another Reactive Val
+  calcReady3 <- reactiveValues(ok = FALSE)
+  
+  observe(if(!calcReady3$ok){
+    shinyjs::disable("button_calc")
+    shinyjs::disable('gen_plot')
+    shinyjs::disable('download')
+  })
+  # 
+  observeEvent(input$other_vars, {
+    shinyjs::enable('button_calc')
+  })
+  
   observeEvent(input$button_dup, {
     shinyjs::disable('button_dup')
     plotReady2$ok <- TRUE
+  })
+  
+  # Create Reactive Value for generating plot
+  plotReady3 <- reactiveValues(ok = FALSE)
+  
+  # calculate fresh choices for group ID
+  
+  groups <- reactive({
+    group_ext(data_g())
+  })
+  
+  
+  # Enable/Disable reactive Value 3
+  observeEvent(input$button_calc, {
+    shinyjs::enable('gen_plot')
+    shinyjs::enable('download')
+    calcReady3$ok <- TRUE
+    updateSelectInput(session, 'spec_plot',
+                      choices = groups(), 
+                      selected = NULL)
+  })
+  
+  
+  
+  observeEvent(input$gen_plot, {
+    shinyjs::enable('gen_plot')
+    plotReady3$ok <- TRUE
   })
   
   ## NA plot
@@ -307,7 +426,9 @@ server <- function(input, output,session) {
   
   # View Final Data
   output$head_2 <- renderDataTable({
-    data_net() 
+    if(calcReady3$ok){
+      data_net()
+    } 
   })
   
   # Prepare data for download
@@ -320,7 +441,22 @@ server <- function(input, output,session) {
     }
   )
   
+  # View Plot
+  output$plot1 <- visNetwork::renderVisNetwork(
+    if(plotReady3$ok){
+      shinyjs::disable("button_calc")
+      #shinyjs::disable('gen_plot')
+      my_viz(data_g())
+    }
+  )
+  
+  output$plot2 <- visNetwork::renderVisNetwork(
+    make_sub(data_g(), input$spec_plot)
+  )
+  
 }
+
+### run app ---------
 
 shinyApp(ui, server)
 

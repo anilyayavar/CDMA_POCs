@@ -146,3 +146,140 @@ eligible_id_cols <- function(data){
 }
 
 eligible_id_cols(data)
+
+
+install.packages('qpdf')
+library(qpdf)
+
+qpdf::pdf_combine(c('Y:\\1.pdf', 'Y:\\2.pdf', 'Y:\\3.pdf'),
+                  output = 'Y:\\out.pdf')
+
+
+group_ext <- function(data){
+  data %>% 
+    mutate(across(everything(), as.character)) %>% 
+    pivot_longer(-IE_code) %>% 
+    select(-name) %>% 
+    graph_from_data_frame() %>% 
+    components() %>% 
+    pluck(membership) %>% 
+    unique()
+}
+
+graph_data <- function(data){
+  data %>% 
+    mutate(across(everything(), as.character)) %>% 
+    pivot_longer(-IE_code) %>% 
+    select(-name) %>% 
+    graph_from_data_frame()
+}
+
+visIgraph(graph_data(data))
+
+g <- graph_data(data)
+
+
+
+visIgraph(g)
+
+
+
+components(g)
+
+group_ext(data)
+
+data_summ(data)
+
+g1 <- make_graph("Zachary")
+visIgraph(g1)
+
+
+
+make_sub(g, 1)
+
+# Create an example graph
+g <- make_graph("Zachary")
+components <- clusters(g)$membership
+
+# Create the visIgraph plot
+plot <- visIgraph(g)
+
+# Add a custom event to display membership as tooltip
+tooltip_code <- '
+  function(event) {
+    var node = this.getNodeAt(event.pointer.DOM);
+    if (node !== null) {
+      var membership = this.body.data.nodes._data[node].membership;
+      return "Membership: " + membership;
+    }
+  }
+'
+plot <- visIgraph(g) %>%
+  visOptions(tooltip = TRUE) %>%
+  visEvents(hoverNode = tooltip_code)
+
+# Print the plot
+plot
+
+
+shiny::runApp(system.file("shiny", package = "visNetwork"))
+
+
+library(igraph)
+library(visNetwork)
+
+# Create an example graph
+g <- make_graph("Zachary")
+components <- clusters(g)$membership
+
+# Create the visIgraph plot
+plot <- visIgraph(g)
+
+# Customize tooltips with membership information
+for (i in 1:vcount(g)) {
+  plot <- visNodes(plot, id = i, title = paste("Membership: ", components[i]), hover = list(title = ""))
+}
+
+# Print the plot
+plot
+
+# Customize tooltips with membership information
+tooltip_code <- '
+  function(node) {
+    return "Membership: " + node.membership;
+  }
+'
+plot <- visOptions(plot, tooltip = list(enabled = TRUE, formatter = htmlwidgets::JS(tooltip_code)))
+
+# Print the plot
+plot
+
+library(igraph)
+library(visNetwork)
+
+# Create an example graph
+g <- make_graph("Zachary")
+components <- clusters(g)$membership
+
+# Create the visIgraph plot
+plot <- visIgraph(g)
+
+# Customize tooltips with membership information
+tooltip_code <- '
+  function(data) {
+    var node = data.node;
+    var membership = node.membership;
+    var tooltip = "Membership: " + membership;
+    data.title = tooltip;
+    return data;
+  }
+'
+
+proxy <- visNetworkProxy(plot)
+visNetworkProxyInvoke(proxy, "updateOptions", options = list(tooltip = list(enabled = TRUE)))
+visNetworkProxyInvoke(proxy, "updateNodes", nodes = list(title = htmlwidgets::JS(tooltip_code)))
+
+# Print the plot
+plot
+
+visNetwork(V(g), E(g), width = '100%')
