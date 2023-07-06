@@ -152,6 +152,7 @@ my_viz <- function(g){
 }
 
 make_sub <- function(g, mem, id_col){
+  
   # Identify clusters
   components <- clusters(g)$membership
   
@@ -329,6 +330,7 @@ ui <- navbarPage(
                selectInput('spec_plot', 'Select Group ID/Cluster ID to visualise any single Cluster', choices = NULL)
              )),
              column(9, 
+                    #verbatimTextOutput('dummyd'),
                     visNetwork::visNetworkOutput('plot2')
                     )
            )
@@ -579,9 +581,11 @@ server <- function(input, output,session) {
     }
   )
   
+  #output$dummyd <- renderPrint(data2()[[input$variable]])
+  
   output$plot2 <- visNetwork::renderVisNetwork(
     if(plotReady3$ok){
-      make_sub(data_g(), as.integer(input$spec_plot), data2()[ ,input$variable])
+      make_sub(data_g(), input$spec_plot, data2()[[input$variable]])
     }
   )
   

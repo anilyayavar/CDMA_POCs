@@ -317,11 +317,17 @@ dummy_data %>%
   visIgraph()
 
 
+make_sub(dummy_gr, 1, dummy_data[, 'ID'])
+
 V(dummy_gr)$group <-  c('B', 'A')[(names(V(dummy_gr)) %in% dummy_data$ID)+1]
 
+components <- clusters(dummy_gr)$membership
 
+dummy_g2 <- induced_subgraph(dummy_gr, which(components == 1))
+
+V(dummy_g2)$group <- c('B', 'A')[(names(V(dummy_g2)) %in% dummy_data[, 'ID'])+1]
   
-visIgraph(dummy_gr) %>% 
+visIgraph(dummy_g2) %>% 
   visGroups(groupname = "A", shape = 'icon',
             icon = list(code = 'f007', size = 75, color = 'red')) %>% 
   visGroups(groupname = "B", shape = 'icon',
