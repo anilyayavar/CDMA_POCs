@@ -7,6 +7,32 @@ library(tidyverse)
 library(igraph)
 library(shinyjs)
 library(visNetwork)
+library(stringi)
+
+### Dummy data ----------------
+PANs <- paste0('PANNO', c('0000', '0000', '1111', '2222', '3333', '4444', '5555', '5555','6666', '7777'), 
+               c('A', 'A', 'B', 'C', 'D', 'E', 'F', 'F', 'G', 'H'))
+
+emails <- paste0(c('aaaa', 'bbbb', 'cccc', 'dddd', 'eeee', 'ffff', 'gggg', 'hhhh', 'iiii', 'bbbb'), '@gmail.com')
+
+
+tele <- paste0('9', c('1', '2', '3', '4', '1', '1', '5', '6', '3', '2') %>% 
+                 map_chr(~ rep(.x, 9) %>% 
+                           paste0(collapse = '')))
+
+dummy_data <- data.frame(
+  ID = 1:10,
+  Mobile = tele,
+  Email = emails,
+  PAN = PANs
+)
+
+dummy_gr <- dummy_data %>% 
+  pivot_longer(-ID, names_to = NULL) %>% 
+  graph_from_data_frame()
+
+V(dummy_gr)$title <- names(V(dummy_gr))
+V(dummy_gr)$group <-  c('B', 'A')[(names(V(dummy_gr)) %in% dummy_data$ID)+1]  
 
 ### Helper Functions ----------------
 
@@ -50,7 +76,8 @@ dup_chart <- function(data) {
     labs(title = "Dupes",
          x = '', 
          y = "Dupes", 
-         subtitle = "If you aren't seeing any red color, it means there are no Duplicate values in the data") +
+         subtitle = "If you aren't seeing any red color, 
+         it means there are no Duplicate values in the data") +
     theme_minimal()
 }
 
@@ -85,7 +112,8 @@ na_chart <- function(data) {
 
 data_id <- function(data){
   data %>% 
-    mutate(ID_col = paste0("Row_", row_number()))
+    mutate(ID_col = paste0("Row_", row_number())) %>% 
+    select(ID_col, everything())
 }
 
 eligible_id_cols <- function(data){
@@ -109,14 +137,37 @@ group_ext <- function(data){
 }
 
 my_viz <- function(g){
+  # Create tooltip
   V(g)$title <- paste('Group ID: ', clusters(g)$membership)
+  # Create Colors
+  colors <- g %>% 
+    components() %>% 
+    pluck(membership) %>% 
+    max() %>% 
+    rainbow()
+  # Assign Colors
+  V(g)$color <- colors[components(g)$membership]
+  # create Viz
   visIgraph(g, layout = 'layout_with_fr')
 }
 
-make_sub <- function(g, mem){
+make_sub <- function(g, mem, id_col){
+  # Identify clusters
   components <- clusters(g)$membership
-  induced_subgraph(g, which(components == mem)) %>% 
-    visIgraph(layout = 'layout_with_fr')
+  
+  # induced subgraph
+  g1 <- induced_subgraph(g, which(components == mem))
+  
+  # Allocate Group
+  V(g1)$group <-  c('B', 'A')[(names(V(g1)) %in% id_col)+1]
+  
+  # make induced Subgraph
+   visIgraph(g1, layout = 'layout_with_fr') %>% 
+    visGroups(groupname = "A", shape = 'icon',
+              icon = list(code = 'f007', size = 75, color = 'red')) %>% 
+    visGroups(groupname = "B", shape = 'icon',
+              icon = list(code = 'f2bc', size = 75, color = 'seagreen')) %>% 
+    addFontAwesome()
 }
 
 ### UI -----------------
@@ -127,7 +178,42 @@ ui <- navbarPage(
   theme = bslib::bs_theme(bootswatch = "lumen"),
   shinyjs::useShinyjs(),
   tabPanel(title = "Read-Me",
-           "GGGG"),
+           fluidRow(
+             column(6,
+                    p("Detection of duplicates is a frequent requirement in audit analytics, 
+                      be it case of detecting risk of duplicate invoices or simply detection 
+             of duplicates in social sector audits."),
+             # br(),
+             p('Detection of duplicates among selected records, is however, not difficult.'),
+             # br(),
+             p('However, during social sector audits, etc. 
+               a need may arise to find duplicate records of beneficiaries/entities who may have created
+             multiple identities on the basis of giving different id proofs against each record.'),
+             p('Imagine a scenario where benefits of a DBT scheme is allowed to beneficiaries only once.  
+               However, a set of identity records
+             are required e.g. Aadhaar number/Token, PAN number, Bank Account Number, Mobile, Email, etc.'),
+             p('See the data - adjoining.')
+                                 ),
+             column(6, 
+                    tableOutput('dummy_dat'))
+           ),
+           fluidRow(column(12, hr())),
+           fluidRow(
+             column(6, 
+                    p('In the above we can see that there are four duplicates on the basis of Mobile, 
+                      two duplicates in Email and two duplicates
+             on the basis of PAN numbers.'),
+             p('If we draw a network chart of these 10 beneficiaries 
+               we can find there are only 3 unique beneficiaries connected
+             with different attributes.  See the adjoining plot.  
+             The plot is interactive and you can zoom in and out to see the elements clearly.'),
+             p('In the plot above')
+                    ),
+             column(6, 
+                    visNetwork::visNetworkOutput('plot_dummy')
+                    )
+           )
+           ),
   tabPanel(title = "Data Prep",
            navlistPanel(widths = c(2, 10),
                         tabPanel("Upload Data",
@@ -192,7 +278,10 @@ ui <- navbarPage(
                                           )
                                           ),
                                    column(7, 
-                                          tableOutput("head_id")
+                                          p(em("View First Five columns and Six rows of new data"), align = 'center'),
+                                          hr(),
+                                          tableOutput("head_id")#,
+                                          #verbatimTextOutput('dummy')
                                           )
                                  )),
                         tabPanel("Map ID and Other Columns",
@@ -208,7 +297,8 @@ ui <- navbarPage(
                                                                    multiple = TRUE,
                                                                    choices = NULL,
                                                                    options = list(maxItems = 3, 
-                                                                                  placeholder = 'Select upto a max of four columns')
+                                                                                  placeholder = 'Select upto a 
+                                                                                  max of four columns')
                                           )
                                           )
                                    ),
@@ -248,11 +338,16 @@ ui <- navbarPage(
 
 server <- function(input, output,session) {
   
-  # Solve delim issue
-  # delims <- reactive({
-  #   input$delims
-  # })
-  
+  # display dummy data
+  output$dummy_dat <- renderTable(dummy_data)
+  output$plot_dummy <- visNetwork::renderVisNetwork(
+    visIgraph(dummy_gr, layout = 'layout_with_fr') %>% 
+      visGroups(groupname = "A", shape = 'icon',
+                icon = list(code = 'f007', size = 75, color = 'red')) %>% 
+      visGroups(groupname = "B", shape = 'icon',
+                icon = list(code = 'f2bc', size = 75, color = 'seagreen')) %>% 
+      addFontAwesome()
+  )
   
   # get data from file
   data <- reactive({
@@ -283,15 +378,36 @@ server <- function(input, output,session) {
     data_summ(data())
   })
   
-  ## select input ID values to be updated - reactive var
-  id_cols <- reactive({
-    eligible_id_cols(data())
+  ## Create Reactive value
+  data_change <- reactiveValues(ok = FALSE)
+  
+  observeEvent(input$button_id, {
+    data_change$ok <- TRUE
   })
   
   
+  # Create alternative data
+  data1 <- eventReactive(input$button_id, {
+    data_id(data())
+  })
+  
+  
+  output$head_id <- renderTable(head_5(data1()))
+  
+  
+  ## select input ID values to be updated - reactive var
+  id_cols <- reactive({
+    if(data_change$ok){
+      eligible_id_cols(data1())
+    } else {
+      eligible_id_cols(data())
+    }
+  })
+  
+  #output$dummy <- renderPrint(id_cols())
   
   # create the select input based on the numeric columns in the dataframe
-  observeEvent(c(input$file, input$delims), {
+  observeEvent(c(input$file, input$delims, input$button_id), {
     req(data())
     #num_cols <- data()
     updateSelectInput(session, 
@@ -303,9 +419,15 @@ server <- function(input, output,session) {
   
   # update other values to be selected based on ID column selection
   observeEvent(input$variable, {
-    #req()
-    other_cols <- setdiff(colnames(data()), 
-                          input$variable)
+    
+    if(data_change$ok){
+      other_cols <- setdiff(colnames(data1()), 
+                            input$variable)
+    } else {
+      other_cols <- setdiff(colnames(data()), 
+                            input$variable)
+    }
+    
     updateSelectizeInput(session, 
                          "other_vars", 
                          choices = other_cols)
@@ -319,11 +441,17 @@ server <- function(input, output,session) {
   # Modify data - retain selected columns only
   data2 <- reactive({
     req(input$other_vars)
-    data()[, c(input$variable, 
-               input$other_vars)]
+    if(data_change$ok){
+      data1()[, c(input$variable, 
+                 input$other_vars)]
+    } else {
+      data()[, c(input$variable, 
+                 input$other_vars)]
+    }
     
   })
   
+
   # Network analysis
   # Create graph object
   data_g <- reactive({
@@ -424,6 +552,7 @@ server <- function(input, output,session) {
     
   })
   
+
   # View Final Data
   output$head_2 <- renderDataTable({
     if(calcReady3$ok){
@@ -451,7 +580,9 @@ server <- function(input, output,session) {
   )
   
   output$plot2 <- visNetwork::renderVisNetwork(
-    make_sub(data_g(), input$spec_plot)
+    if(plotReady3$ok){
+      make_sub(data_g(), as.integer(input$spec_plot), data2()[ ,input$variable])
+    }
   )
   
 }
