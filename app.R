@@ -163,7 +163,12 @@ my_viz <- function(g) {
   # Assign Colors
   V(g)$color <- colors[components(g)$membership]
   # create Viz
-  visIgraph(g, layout = "layout_with_fr")
+  visIgraph(g, layout = "layout_with_fr") %>% 
+    visOptions(highlightNearest = list(
+      enabled = TRUE,
+      degree = diameter(g, directed = F),
+      hover = TRUE
+      ))
 }
 
 make_sub <- function(g, mem, id_col) {
