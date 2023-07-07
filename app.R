@@ -180,7 +180,7 @@ ui <- navbarPage(
   shinyjs::useShinyjs(),
   tabPanel(title = "Read-Me",
            fluidRow(
-             column(6,
+             column(8,
                     p("Detection of duplicates is a frequent requirement in audit analytics, 
                       be it case of detecting risk of duplicate invoices or simply detection 
              of duplicates in social sector audits."),
@@ -195,7 +195,7 @@ ui <- navbarPage(
              are required e.g. Aadhaar number/Token, PAN number, Bank Account Number, Mobile, Email, etc.'),
              p('See the data - adjoining.')
              ),
-             column(6, 
+             column(4, 
                     tableOutput('dummy_dat'))
            ),
            fluidRow(column(12, hr())),
@@ -208,7 +208,15 @@ ui <- navbarPage(
                we can find there are only 3 unique beneficiaries connected
              with different attributes.  See the adjoining plot.  
              The plot is interactive and you can zoom in and out to see the elements clearly.'),
-             p('In the plot above')
+             p('In the adjoining plot, it can be noticed that persons/entities having ID 6 
+               and 10, respectively are connected in same network, though none of the attributes
+               out of mobile number, email and PAN number are same. 
+               In fact it raises a suspicion and hence a red flag, that a single entity/person 
+               has created 5 records using different combinations of attributes.  Thus, 
+               this analysis may lead an auditor generating red flags or finding network/collusion
+               among different entities, which may be subjected for detailed analysis.'),
+             p('There are however some Do\'s and some Dont\'s before carrying out network analysis.' ),
+             p(em("Do's"))
              ),
              column(6, 
                     visNetwork::visNetworkOutput('plot_dummy')
